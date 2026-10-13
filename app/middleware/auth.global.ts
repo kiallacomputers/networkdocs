@@ -1,0 +1,1 @@
+export default defineNuxtRouteMiddleware(async(to)=>{if(import.meta.server)return;const auth=useAuth();if(!auth.value){try{const result=await $fetch<{user:any}>('/api/auth/me');auth.value=result.user}catch{auth.value=null}}if(!auth.value&&to.path!='/login')return navigateTo('/login');if(auth.value&&to.path==='/login')return navigateTo('/')})
