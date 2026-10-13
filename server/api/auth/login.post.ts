@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const body = schema.parse(await readBody(event))
   const email = body.email.trim().toLowerCase()
   await assertLoginAllowed(event, email)
-  const rows = await query('SELECT id,email,display_name,role,password_hash FROM users WHERE lower(email)=$1', [email])
+  const rows = await query('SELECT id,email,display_name,role,password_hash FROM users WHERE lower(email)=$1 AND is_active=true', [email])
   const user = rows[0]
   const fallbackHash = '$2b$12$KIXQ4xRk0CHYwJbH4p6E1u3R6gVQb0RkSkG3l6kJYcJjJf9iC5Q8O'
   const valid = await bcrypt.compare(body.password, user?.password_hash || fallbackHash)
