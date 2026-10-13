@@ -1,3 +1,10 @@
 import { requireUser } from '../../utils/auth'
 import { query } from '../../utils/db'
-export default defineEventHandler(async event=>{const user=await requireUser(event);return query(`SELECT d.*,r.name AS rack_name,s.name AS site_name,b.name AS building_name,c.name AS company_name FROM devices d LEFT JOIN racks r ON r.id=d.rack_id LEFT JOIN sites s ON s.id=r.site_id LEFT JOIN buildings b ON b.id=r.building_id LEFT JOIN companies c ON c.id=d.company_id WHERE $1::boolean OR d.company_id IN (SELECT company_id FROM company_users WHERE user_id=$2) ORDER BY d.name`,[user.is_super_admin===true,user.id])})
+export default defineEventHandler(async event=>{
+ const user=await requireUser(event)
+ return query(`SELECT d.*,r.name AS rack_name,s.name AS site_name,b.name AS building_name,c.name AS company_name
+ FROM devices d LEFT JOIN racks r ON r.id=d.rack_id LEFT JOIN sites s ON s.id=d.site_id
+ LEFT JOIN buildings b ON b.id=d.building_id LEFT JOIN companies c ON c.id=d.company_id
+ WHERE $1::boolean OR d.company_id IN (SELECT company_id FROM company_users WHERE user_id=$2)
+ ORDER BY d.name`,[user.is_super_admin===true,user.id])
+})

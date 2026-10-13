@@ -24,16 +24,24 @@
     <section class="panel">
       <h2>All devices ({{ devices.length }})</h2>
       <input v-model="search" placeholder="Search devices, serials, IPs…" style="width:100%;margin-bottom:12px">
+      <div class="iv-filters"><label>Company<select v-model="filterCompany"><option value="">All companies</option><option v-for="c in companies" :key="c.id" :value="String(c.id)">{{c.name}}</option></select></label><label>Site<select v-model="filterSite"><option value="">All sites</option><option v-for="s in filterSites" :key="s.id" :value="String(s.id)">{{s.name}}</option></select></label><label>Building<select v-model="filterBuilding"><option value="">All buildings</option><option v-for="b in filterBuildings" :key="b.id" :value="String(b.id)">{{b.name}}</option></select></label><label>Floor<input v-model="filterFloor" placeholder="All floors"></label><label>Room<input v-model="filterRoom" placeholder="All rooms"></label></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Name</th><th>Type</th><th>Model</th><th>IP</th><th>Site / Building / Rack</th><th>U</th><th>Ports</th><th v-if="editable">Action</th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Model</th><th>IP</th><th>Site / Building / Floor / Room / Rack</th><th>U</th><th>Ports</th><th v-if="editable">Action</th></tr></thead>
         <tbody><tr v-for="d in filtered" :key="d.id">
           <td><strong>{{ d.name }}</strong><div class="muted">{{ d.serial }}</div></td>
           <td>{{ d.device_type }}</td><td>{{ d.manufacturer }} {{ d.model }}</td><td>{{ d.ip_address }}</td>
-          <td>{{ d.site_name || '—' }} / {{ d.rack_id ? (d.building_name || 'Unassigned building') : '—' }} / {{ d.rack_name || 'Unplaced' }}</td><td>{{ d.rack_u || '—' }}</td><td>{{ d.port_count }}</td>
-          <td v-if="editable"><button type="button" @click="openEdit(d)">Edit</button></td>
+          <td>{{ d.site_name || '—' }} / {{ d.building_name || '—' }} / {{ d.floor || '—' }} / {{ d.room || '—' }} / {{ d.rack_name || 'Unplaced' }}</td><td>{{ d.rack_u || '—' }}</td><td>{{ d.port_count }}</td>
+          <td v-if="editable"><button type="button" @click="openEdit(d)">Edit</button> <button type="button" @click="openLocation(d)">Location</button></td>
         </tr></tbody>
       </table></div>
     </section>
+    <div v-if="moving" class="iv-overlay" @click.self="closeLocation"><section class="panel iv-dialog" role="dialog" aria-modal="true" aria-labelledby="location-heading"><h2 id="location-heading">Device location — {{moving.name}}</h2><p class="muted">Rack-mounted devices inherit their site and building from the selected rack. Existing ports and patch connections are preserved.</p>
+      <div class="fields"><label>Site<select v-model="locationForm.site_id" :disabled="!!locationForm.rack_id"><option :value="null">Unassigned site</option><option v-for="s in locationSites" :key="s.id" :value="Number(s.id)">{{s.name}}</option></select></label>
+      <label>Building<select v-model="locationForm.building_id" :disabled="!!locationForm.rack_id || !locationForm.site_id"><option :value="null">Unassigned building</option><option v-for="b in locationBuildings" :key="b.id" :value="Number(b.id)">{{b.name}}</option></select></label>
+      <label>Rack<select v-model="locationForm.rack_id"><option :value="null">Unracked device</option><option v-for="r in locationRacks" :key="r.id" :value="Number(r.id)">{{r.site_name}} / {{r.building_name || 'No building'}} / {{r.name}}</option></select></label>
+      <label>Rack U<input v-model.number="locationForm.rack_u" type="number" min="1" max="60" :disabled="!locationForm.rack_id" placeholder="Required for rack placement"></label>
+      <label>Floor<input v-model="locationForm.floor" maxlength="80" placeholder="e.g. Ground floor"></label><label>Room<input v-model="locationForm.room" maxlength="160" placeholder="e.g. ICT Office"></label></div>
+      <p v-if="locationError" class="error" role="alert">{{locationError}}</p><div class="iv-actions"><button type="button" :disabled="locationSaving" @click="closeLocation">Cancel</button><button type="button" :disabled="locationSaving || (!!locationForm.rack_id && !locationForm.rack_u)" @click="saveLocation">{{locationSaving?'Saving…':'Save location'}}</button></div></section></div>
     <div v-if="editing" class="iv-overlay" @click.self="closeEdit">
       <section class="panel iv-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-device-heading">
         <h2 id="edit-device-heading">Edit device — {{ editing.name }}</h2>
@@ -58,6 +66,13 @@
 <script setup lang="ts">
 const {data:companies}=await useFetch<any[]>('/api/companies',{default:()=>[]})
 const newDeviceCompany=ref(0)
+const {data:sites}=await useFetch<any[]>('/api/sites',{default:()=>[]})
+const {data:buildings}=await useFetch<any[]>('/api/buildings',{default:()=>[]})
+const filterCompany=ref(''),filterSite=ref(''),filterBuilding=ref(''),filterFloor=ref(''),filterRoom=ref('')
+const filterSites=computed(()=>sites.value.filter(s=>!filterCompany.value||String(s.company_id)===filterCompany.value))
+const filterBuildings=computed(()=>buildings.value.filter(b=>!filterSite.value?(!filterCompany.value||filterSites.value.some(s=>Number(s.id)===Number(b.site_id))):String(b.site_id)===filterSite.value))
+watch(filterCompany,()=>{filterSite.value='';filterBuilding.value=''})
+watch(filterSite,()=>{filterBuilding.value=''})
 const auth = useAuth()
 const editable = computed(() => ['admin', 'editor'].includes(auth.value?.role))
 const { data: racks } = await useFetch<any[]>('/api/racks', { default: () => [] })
@@ -68,7 +83,24 @@ const rackChoice = ref('')
 const position = ref('')
 const search = ref('')
 const error = ref('')
-const filtered = computed(() => devices.value.filter(d => JSON.stringify(d).toLowerCase().includes(search.value.toLowerCase())))
+const filtered = computed(() => devices.value.filter(d =>
+ JSON.stringify(d).toLowerCase().includes(search.value.toLowerCase()) &&
+ (!filterCompany.value||String(d.company_id)===filterCompany.value) &&
+ (!filterSite.value||String(d.site_id)===filterSite.value) &&
+ (!filterBuilding.value||String(d.building_id)===filterBuilding.value) &&
+ (!filterFloor.value||String(d.floor||'').toLowerCase().includes(filterFloor.value.toLowerCase())) &&
+ (!filterRoom.value||String(d.room||'').toLowerCase().includes(filterRoom.value.toLowerCase()))
+))
+const moving=ref<any>(null),locationSaving=ref(false),locationError=ref('')
+const locationForm=reactive<{site_id:number|null;building_id:number|null;rack_id:number|null;rack_u:number|null;floor:string;room:string}>({site_id:null,building_id:null,rack_id:null,rack_u:null,floor:'',room:''})
+const locationSites=computed(()=>sites.value.filter(s=>Number(s.company_id)===Number(moving.value?.company_id)))
+const locationBuildings=computed(()=>buildings.value.filter(b=>Number(b.site_id)===Number(locationForm.site_id)))
+const locationRacks=computed(()=>racks.value.filter(r=>locationSites.value.some(s=>Number(s.id)===Number(r.site_id))))
+watch(()=>locationForm.site_id,()=>{if(!locationForm.rack_id&&!locationBuildings.value.some(b=>Number(b.id)===Number(locationForm.building_id)))locationForm.building_id=null})
+watch(()=>locationForm.rack_id,(id)=>{if(id){const rack=racks.value.find(r=>Number(r.id)===Number(id));if(rack){locationForm.site_id=Number(rack.site_id);locationForm.building_id=rack.building_id==null?null:Number(rack.building_id)}}else locationForm.rack_u=null})
+function openLocation(d:any){if(!editable.value)return;moving.value=d;locationError.value='';Object.assign(locationForm,{site_id:d.site_id==null?null:Number(d.site_id),building_id:d.building_id==null?null:Number(d.building_id),rack_id:d.rack_id==null?null:Number(d.rack_id),rack_u:d.rack_u==null?null:Number(d.rack_u),floor:d.floor||'',room:d.room||''})}
+function closeLocation(){if(!locationSaving.value)moving.value=null}
+async function saveLocation(){if(!moving.value||locationSaving.value)return;locationSaving.value=true;locationError.value='';try{await $fetch(`/api/devices/${moving.value.id}/location`,{method:'PATCH',body:{...locationForm}});await refresh();moving.value=null}catch(e:any){locationError.value=e?.data?.statusMessage||e?.data?.message||'Could not move device'}finally{locationSaving.value=false}}
 async function add() {
   error.value = ''
   try {
@@ -105,6 +137,8 @@ async function saveEdit() {
 </script>
 
 <style scoped>
+.iv-filters { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px; }
+.iv-filters label { display:flex;flex-direction:column;gap:5px; }
 .iv-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 20px; overflow: auto; }
 .iv-dialog { width: min(900px,100%); max-height: 90vh; overflow-y: auto; margin: auto; }
 .iv-dialog textarea { width: 100%; }
