@@ -16,6 +16,7 @@ export default defineEventHandler(async event => {
   if(id === Number(admin.id) && (body.is_active === false || (body.role && body.role !== 'admin'))) {
     throw createError({statusCode:400,statusMessage:'You cannot disable or demote your own account'})
   }
+  if(id===1 && (body.role && body.role!=='admin' || body.is_active===false))throw createError({statusCode:403,statusMessage:'Cannot disable or demote bootstrap Super Admin'})
   const hash = body.password ? await bcrypt.hash(body.password,12) : null
   const client = await db().connect()
   try {

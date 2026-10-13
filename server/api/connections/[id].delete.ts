@@ -1,3 +1,4 @@
+import { connectionCompany,requireCompany } from '../../utils/companyAccess'
 import { requireUser } from '../../utils/auth'
 import { db } from '../../utils/db'
 
@@ -7,6 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!Number.isSafeInteger(id) || id < 1) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid connection ID' })
   }
+  await requireCompany(user,await connectionCompany(id),true)
   const client = await db().connect()
   try {
     await client.query('BEGIN')

@@ -4,6 +4,7 @@
     <div class="panel">
       <h2>Add device</h2>
       <div class="fields">
+        <label>Company<select v-model.number="newDeviceCompany"><option :value="0">Choose company</option><option v-for="c in companies" :key="c.id" :value="Number(c.id)">{{c.name}}</option></select></label>
         <label>Name<input v-model="form.name" placeholder="SW-CORE-01"></label>
         <label>Type<select v-model="form.device_type"><option v-for="t in types" :key="t" :value="t">{{ t }}</option></select></label>
         <label>Manufacturer<input v-model="form.manufacturer"></label>
@@ -55,6 +56,8 @@
 </template>
 
 <script setup lang="ts">
+const {data:companies}=await useFetch<any[]>('/api/companies',{default:()=>[]})
+const newDeviceCompany=ref(0)
 const auth = useAuth()
 const editable = computed(() => ['admin', 'editor'].includes(auth.value?.role))
 const { data: racks } = await useFetch<any[]>('/api/racks', { default: () => [] })
@@ -69,7 +72,7 @@ const filtered = computed(() => devices.value.filter(d => JSON.stringify(d).toLo
 async function add() {
   error.value = ''
   try {
-    await $fetch('/api/devices', { method: 'POST', body: { ...form, rack_id: rackChoice.value ? Number(rackChoice.value) : null, rack_u: position.value ? Number(position.value) : null } })
+    await $fetch('/api/devices', { method: 'POST', body: { ...form, company_id:newDeviceCompany.value, rack_id: rackChoice.value ? Number(rackChoice.value) : null, rack_u: position.value ? Number(position.value) : null } })
     form.name = ''; form.serial = ''; form.ip_address = ''
     await refresh()
   } catch (e: any) { error.value = e?.data?.statusMessage || 'Could not add device' }

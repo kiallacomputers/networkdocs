@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { requireUser } from '../../utils/auth'
+import { siteCompany,requireCompany } from '../../utils/companyAccess'
 import { db } from '../../utils/db'
 
 const schema = z.object({
@@ -12,6 +13,7 @@ const schema = z.object({
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event, true)
   const body = schema.parse(await readBody(event))
+  await requireCompany(user,await siteCompany(body.site_id),true)
   const client = await db().connect()
   try {
     await client.query('BEGIN')

@@ -1,3 +1,4 @@
+import { requireCompany,deviceCompany } from '../../../utils/companyAccess'
 import { z } from 'zod'
 import { requireUser } from '../../../utils/auth'
 import { db } from '../../../utils/db'
@@ -20,6 +21,7 @@ export default defineEventHandler(async (event) => {
   if (!Number.isSafeInteger(id) || id < 1) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid device ID' })
   }
+  await requireCompany(user,await deviceCompany(id),true)
   const parsed = schema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid device details' })
