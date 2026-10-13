@@ -12,7 +12,7 @@
         <label>Serial<input v-model="form.serial"></label>
         <label>IP address<input v-model="form.ip_address"></label>
         <label>VLAN / Management VLAN<input v-model="form.vlan"></label>
-        <label>Rack<select v-model="rackChoice"><option value="">Unplaced</option><option v-for="r in racks" :key="r.id" :value="String(r.id)">{{ r.site_name }} — {{ r.name }}</option></select></label>
+        <label>Rack<select v-model="rackChoice"><option value="">Unplaced</option><option v-for="r in racks" :key="r.id" :value="String(r.id)">{{ r.site_name }} — {{ r.building_name || "Unassigned building" }} — {{ r.name }}</option></select></label>
         <label>Start U<input v-model="position" type="number" min="1" max="60" placeholder="Optional"></label>
         <label>Rack height (U)<input v-model.number="form.rack_height" type="number" min="1" max="60"></label>
         <label>Number of ports<input v-model.number="form.port_count" type="number" min="0" max="192"></label>
@@ -25,11 +25,11 @@
       <h2>All devices ({{ devices.length }})</h2>
       <input v-model="search" placeholder="Search devices, serials, IPs…" style="width:100%;margin-bottom:12px">
       <div class="table-wrap"><table>
-        <thead><tr><th>Name</th><th>Type</th><th>Model</th><th>IP</th><th>Site / Rack</th><th>U</th><th>Ports</th><th v-if="editable">Action</th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Model</th><th>IP</th><th>Site / Building / Rack</th><th>U</th><th>Ports</th><th v-if="editable">Action</th></tr></thead>
         <tbody><tr v-for="d in filtered" :key="d.id">
           <td><strong>{{ d.name }}</strong><div class="muted">{{ d.serial }}</div></td>
           <td>{{ d.device_type }}</td><td>{{ d.manufacturer }} {{ d.model }}</td><td>{{ d.ip_address }}</td>
-          <td>{{ d.site_name || '—' }} / {{ d.rack_name || 'Unplaced' }}</td><td>{{ d.rack_u || '—' }}</td><td>{{ d.port_count }}</td>
+          <td>{{ d.site_name || '—' }} / {{ d.rack_id ? (d.building_name || 'Unassigned building') : '—' }} / {{ d.rack_name || 'Unplaced' }}</td><td>{{ d.rack_u || '—' }}</td><td>{{ d.port_count }}</td>
           <td v-if="editable"><button type="button" @click="openEdit(d)">Edit</button></td>
         </tr></tbody>
       </table></div>

@@ -20,7 +20,7 @@
    </div>
   </div>
  </section>
- <section class="panel"><h2>Assign existing sites</h2>
+ <section v-if="editingBuilding" class="panel"><h2>Edit building</h2><div class="fields"><label>Name<input v-model="buildingEdit.name" maxlength="120"></label><label>Code<input v-model="buildingEdit.code" maxlength="40"></label><label>Description / Notes<textarea v-model="buildingEdit.description" maxlength="1000" rows="3"></textarea></label><div style="align-self:end"><button :disabled="busy" @click="saveBuilding">Save building</button> <button type="button" @click="editingBuilding=0">Cancel</button></div></div></section><section class="panel"><h2>Assign existing sites</h2>
   <p class="muted">Choose the correct customer for each existing site. Nothing is assigned automatically.</p>
   <div v-for="site in sites" :key="site.id" class="fields" style="align-items:end;margin-bottom:10px">
    <label>{{ site.name }}<select :value="site.company_id ?? ''" @change="selectCompany(site.id,$event)" :disabled="busy">
@@ -43,6 +43,7 @@ async function createCompany(){error.value='';notice.value='';busy.value=true;tr
 async function selectCompany(siteId:number,event:Event){const target=event.target as HTMLSelectElement;const value=Number(target.value);if(!value){error.value='Choose a company to assign this site';await refreshSites();return}
  error.value='';notice.value='';busy.value=true;try{await $fetch('/api/admin/companies/assign-site',{method:'PATCH',body:{site_id:Number(siteId),company_id:value}});await Promise.all([refreshSites(),refreshCompanies()]);notice.value='Site assigned'}catch(e:any){error.value=e?.data?.statusMessage||e?.message||'Assignment failed';await refreshSites()}finally{busy.value=false}}
 async function createBuilding(siteId:number){error.value='';notice.value='';busy.value=true;try{await $fetch('/api/buildings',{method:'POST',body:{site_id:siteId,name:buildingNames[siteId],code:buildingCodes[siteId]||'',description:''}});buildingNames[siteId]='';buildingCodes[siteId]='';await refreshBuildings();notice.value='Building created'}catch(e:any){error.value=e?.data?.statusMessage||e?.message||'Unable to create building'}finally{busy.value=false}}
-async function editBuilding(building:any){const name=window.prompt('Building name',building.name);if(name===null||!name.trim())return;const code=window.prompt('Building code',building.code||'');if(code===null)return;error.value='';notice.value='';try{await $fetch(`/api/buildings/${building.id}`,{method:'PATCH',body:{name:name.trim(),code:code.trim(),description:building.description||''}});await refreshBuildings();notice.value='Building updated'}catch(e:any){error.value=e?.data?.statusMessage||e?.message||'Unable to update building'}}
+const editingBuilding=ref(0),buildingEdit=reactive({name:'',code:'',description:''})
+function editBuilding(building:any){editingBuilding.value=Number(building.id);Object.assign(buildingEdit,{name:building.name,code:building.code||'',description:building.description||''})}
+async function saveBuilding(){if(!editingBuilding.value)return;error.value='';notice.value='';busy.value=true;try{await $fetch(`/api/buildings/${editingBuilding.value}`,{method:'PATCH',body:{...buildingEdit}});await refreshBuildings();editingBuilding.value=0;notice.value='Building updated'}catch(e:any){error.value=e?.data?.statusMessage||e?.message||'Unable to update building'}finally{busy.value=false}}
 </script>
-
