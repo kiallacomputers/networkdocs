@@ -7,16 +7,31 @@ export async function requireSuperAdmin(event:any) {
  if(!superAdmin(user)) throw createError({statusCode:403,statusMessage:'Super Administrator access required'})
  return user
 }
+// A user's global role is their ceiling; company membership can only reduce access.
+export type CompanyRole = 'admin' | 'editor' | 'viewer'
+const roleRank: Record<CompanyRole,number> = { viewer: 1, editor: 2, admin: 3 }
+export function effectiveCompanyRole(user:any, assignedRole:CompanyRole|null):CompanyRole|null {
+ if(superAdmin(user)) return 'admin'
+ if(!assignedRole) return null
+ const globalRole = user.role as CompanyRole
+ if(!(globalRole in roleRank)) return null
+ return roleRank[globalRole] <= roleRank[assignedRole] ? globalRole : assignedRole
+}
 export async function companyIds(user:any, write=false):Promise<number[]> {
  if(superAdmin(user)) return []
- const rows=await query(`SELECT company_id FROM company_users WHERE user_id=$1 AND ($2::boolean=false OR role IN ('admin','editor'))`,[user.id,write])
- return rows.map((r:any)=>Number(r.company_id))
+ if(write && !['admin','editor'].includes(user.role)) return []
+ const rows=await query(`SELECT company_id,role FROM company_users WHERE user_id=$1`,[user.id])
+ return rows.filter((r:any)=>{
+  const role=effectiveCompanyRole(user,r.role)
+  return role && (!write || role==='editor' || role==='admin')
+ }).map((r:any)=>Number(r.company_id))
 }
 export async function requireCompany(user:any, companyId:number|null|undefined,write=false) {
  if(superAdmin(user)) return
  if(!companyId) throw createError({statusCode:403,statusMessage:'Company access required'})
- const rows=await query(`SELECT 1 FROM company_users WHERE user_id=$1 AND company_id=$2 AND ($3::boolean=false OR role IN ('admin','editor'))`,[user.id,companyId,write])
- if(!rows.length) throw createError({statusCode:403,statusMessage:'Company access denied'})
+ const rows=await query(`SELECT role FROM company_users WHERE user_id=$1 AND company_id=$2`,[user.id,companyId])
+ const role=effectiveCompanyRole(user,rows[0]?.role??null)
+ if(!role || (write && role==='viewer')) throw createError({statusCode:403,statusMessage:'Company access denied'})
 }
 export async function siteCompany(siteId:number) {
  const rows=await query('SELECT company_id FROM sites WHERE id=$1',[siteId]);if(!rows.length)throw createError({statusCode:404,statusMessage:'Site not found'});return rows[0].company_id===null?null:Number(rows[0].company_id)
